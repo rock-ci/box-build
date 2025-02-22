@@ -1,22 +1,90 @@
-name: Build
+name: Build Debian Trixie packages for box86 and box64
 on:
   - workflow_dispatch
+env:
+  ALL_BUILDS: 'sd845 rk3399 rk3588'
 jobs:
   build_package:
     runs-on: ubuntu-24.04-arm
     strategy:
       matrix:
-        architecture:
-          - armhf
-          - arm64
+        package:
+          - box86
+          - box64
+        optimize:
+          - sd845
+          - rk3399
+          - rk3588
         include:
-          - architecture: armhf
+          - package: box86
+            version: '0.3.8'
+            architecture: armhf
             docker_platform: linux/arm/v7
-          - architecture: arm64
+            build_deps: neon-support
+          - package: box64
+            version: '0.3.2'
+            architecture: arm64
             docker_platform: linux/arm64
+            build_deps: ''
     container:
       image: debian:trixie
       options: --platform ${{ matrix.docker_platform }}
     steps:
-      - name: Show dpkg native architecture
-        run: dpkg --print-architecture
+      - name: Install required dependencies
+        env:
+          EXTRA_BUILD_DEPS: '${{ matrix.build_deps }}'
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends build-essential ca-certificates cmake curl debhelper dpkg-dev python3 "$EXTRA_BUILD_DEPS"
+
+      - name: Download and extract source code
+        env:
+          PACKAGE: '${{ matrix.package }}'
+          VERSION: '${{ matrix.version }}'
+        run: |
+          curl -sSL -o "${PACKAGE}.tar.gz" "https://github.com/ptitSeb/${PACKAGE}/archive/refs/tags/v${VERSION}.tar.gz"
+          tar -x -f "${PACKAGE}.tar.gz" -v
+
+      - name: Patch debian files
+        env:
+          PACKAGE: '${{ matrix.package }}'
+          OPTIMIZE: '${{ matrix.optimize }}'
+        working-directory: ${{ matrix.package }}-${{ matrix.version }}
+        run: |
+          conflicts=()
+          for build_name in $ALL_BUILDS
+          do
+            if [[ "$build_name" != "$OPTIMIZE" ]]
+            then
+              conflicts+=("${PACKAGE}-${build_name}")
+            fi
+          done
+          sed -i -e "s/-DARM_DYNAREC=1/-DARM_DYNAREC=1 -D${OPTIMIZE^^}=1/" debian/rules
+          sed -i -e "s/Package: ${PACKAGE}/Package: ${PACKAGE}-${OPTIMIZE}\nProvides: ${PACKAGE}\nConflicts: ${conflicts[@]}/" debian/control
+
+      - name: box64-specific patches
+        if: matrix.package == 'box64'
+        working-directory: ${{ matrix.package }}-${{ matrix.version }}
+        run: |
+          sed -i -e "s/--exclude=libssl\.1\.0\.0/--exclude=libssl.so.1.0.0 --exclude box64-bash/" debian/rules
+
+      - name: box86-specific patches
+        if: matrix.package == 'box86'
+        working-directory: ${{ matrix.package }}-${{ matrix.version }}
+        run: |
+          sed -i -e 's/dh_shlibdeps --exclude=/dh_shlibdeps --exclude=libunwind.so.8 --exclude=/' debian/rules
+
+      - name: Build package
+        env:
+          DEB_BUILD_OPTIONS: nostrip
+        working-directory: ${{ matrix.package }}-${{ matrix.version }}
+        run: dpkg-buildpackage -us -uc -nc
+
+      - name: Upload built artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.package }}-${{ matrix.optimize }}-artifacts
+          path: |
+            ${{ matrix.package }}-${{ matrix.optimize }}_${{ matrix.version }}_${{ matrix.architecture }}.deb
+            ${{ matrix.package }}_${{ matrix.version }}_${{ matrix.architecture }}.buildinfo
+            ${{ matrix.package }}_${{ matrix.version }}_${{ matrix.architecture }}.changes

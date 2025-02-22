@@ -99,7 +99,7 @@ jobs:
       - name: Upload built artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.package }}-${{ matrix.optimize }}-artifacts
+          name: ${{ matrix.package }}-${{ matrix.optimize }}
           path: |
             ${{ matrix.package }}-${{ matrix.optimize }}_${{ matrix.version }}_${{ matrix.architecture }}.deb
             ${{ matrix.package }}_${{ matrix.version }}_${{ matrix.architecture }}.buildinfo

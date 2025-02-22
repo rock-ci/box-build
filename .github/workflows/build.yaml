@@ -25,14 +25,17 @@ jobs:
             architecture: armhf
             docker_platform: linux/arm/v7
             build_deps: neon-support
+            volumes: '["/tmp/node20:/__e/node20"]'
           - package: box64
             version: '0.3.2'
             architecture: arm64
             docker_platform: linux/arm64
             build_deps: ''
+            volumes: '[]'
     container:
       image: debian:trixie
       options: --platform ${{ matrix.docker_platform }}
+      volumes: ${{ fromJSON(matrix.volumes) }}
     steps:
       - name: Install required dependencies
         env:
@@ -40,6 +43,15 @@ jobs:
         run: |
           apt-get update
           apt-get install -y --no-install-recommends build-essential ca-certificates cmake curl debhelper dpkg-dev python3 "$EXTRA_BUILD_DEPS"
+
+      - name: Work around https://github.com/actions/upload-artifact/issues/616
+        if: matrix.architecture == 'armhf'
+        run: |
+          ls -lar /__e/node20
+          curl -Lo /tmp/node.tar.gz https://unofficial-builds.nodejs.org/download/release/v20.18.3/node-v20.18.3-linux-armv6l.tar.gz
+          cd /__e/node20
+          tar -x --strip-components=1 -f /tmp/node.tar.gz
+          ls -lar /__e/node20/bin
 
       - name: Download and extract source code
         env:

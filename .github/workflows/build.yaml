@@ -55,16 +55,16 @@ jobs:
           OPTIMIZE: '${{ matrix.optimize }}'
         working-directory: ${{ matrix.package }}-${{ matrix.version }}
         run: |
-          conflicts=()
+          conflicts="${PACKAGE}"
           for build_name in $ALL_BUILDS
           do
             if [[ "$build_name" != "$OPTIMIZE" ]]
             then
-              conflicts+=("${PACKAGE}-${build_name}")
+              conflicts+=", ${PACKAGE}-${build_name}"
             fi
           done
           sed -i -e "s/-DARM_DYNAREC=1/-DARM_DYNAREC=1 -D${OPTIMIZE^^}=1/" debian/rules
-          sed -i -e "s/Package: ${PACKAGE}/Package: ${PACKAGE}-${OPTIMIZE}\nProvides: ${PACKAGE}\nConflicts: ${conflicts[*]}/" debian/control
+          sed -i -e "s/Package: ${PACKAGE}/Package: ${PACKAGE}-${OPTIMIZE}\nProvides: ${PACKAGE}\nConflicts: ${conflicts}/" debian/control
 
       - name: box64-specific patches
         if: matrix.package == 'box64'

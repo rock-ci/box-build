@@ -10,6 +10,7 @@ jobs:
   build_package:
     runs-on: ubuntu-24.04-arm
     strategy:
+      fail-fast: false
       matrix:
         package:
           - box86
@@ -63,7 +64,7 @@ jobs:
             fi
           done
           sed -i -e "s/-DARM_DYNAREC=1/-DARM_DYNAREC=1 -D${OPTIMIZE^^}=1/" debian/rules
-          sed -i -e "s/Package: ${PACKAGE}/Package: ${PACKAGE}-${OPTIMIZE}\nProvides: ${PACKAGE}\nConflicts: ${conflicts[@]}/" debian/control
+          sed -i -e "s/Package: ${PACKAGE}/Package: ${PACKAGE}-${OPTIMIZE}\nProvides: ${PACKAGE}\nConflicts: ${conflicts[*]}/" debian/control
 
       - name: box64-specific patches
         if: matrix.package == 'box64'
